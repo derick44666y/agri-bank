@@ -3,7 +3,6 @@ services:
   - type: web
     name: agribank-backend
     runtime: node
-    plan: free
     buildCommand: cd backend && npm install && npx prisma generate && npm run build
     startCommand: cd backend && npm run prisma:migrate && npm start
     envVars:
@@ -27,7 +26,6 @@ services:
   - type: web
     name: agribank-frontend
     runtime: static
-    plan: free
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
@@ -40,6 +38,5 @@ services:
 
 databases:
   - name: agribank-db
-    plan: free
     databaseName: agribank
     user: agribank
