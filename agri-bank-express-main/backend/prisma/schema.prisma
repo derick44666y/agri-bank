@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AppRole {
+  admin
+  user
+}
+
+enum KycStatus {
+  not_started
+  pending
+  verified
+  rejected
+}
+
+enum AccountType {
+  current
+  savings
+  crypto
+}
+
+enum AccountCurrency {
+  EUR
+  GBP
+  USD
+  CHF
+  PLN
+}
+
+enum TxDirection {
+  credit
+  debit
+}
+
+enum TxStatus {
+  pending
+  completed
+  failed
+}
+
+enum TransferNetwork {
+  internal
+  sepa
+  sepa_instant
+  swift
+}
+
+model User {
+  id              String            @id @default(uuid()) @db.Uuid
+  email           String            @unique
+  passwordHash    String            @map("password_hash")
+  refreshToken    String?           @map("refresh_token")
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  profile         Profile?
+  roles           UserRole[]
+  accounts        Account[]
+  transactions    Transaction[]
+  recipients      Recipient[]
+  kycVerifications KycVerification[]
+  cryptoHoldings  CryptoHolding[]
+
+  @@map("users")
+}
+
+model Profile {
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String      @unique @map("user_id") @db.Uuid
+  fullName      String?     @map("full_name")
+  email         String?
+  phone         String?
+  dateOfBirth   DateTime?   @map("date_of_birth") @db.Date
+  country       String?
+  city          String?
+  addressLine   String?     @map("address_line")
+  postalCode    String?     @map("postal_code")
+  kycStatus     KycStatus   @default(not_started) @map("kyc_status")
+  twoFaEnabled  Boolean     @default(false) @map("two_fa_enabled")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model UserRole {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  role      AppRole
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model KycVerification {
+  id              String      @id @default(uuid()) @db.Uuid
+  userId          String      @map("user_id") @db.Uuid
+  documentType    String?     @map("document_type")
+  documentNumber  String?     @map("document_number")
+  documentCountry String?     @map("document_country")
+  selfieTaken     Boolean     @default(false) @map("selfie_taken")
+  addressLine     String?     @map("address_line")
+  city            String?
+  postalCode      String?     @map("postal_code")
+  country         String?
+  status          KycStatus   @default(pending)
+  submittedAt     DateTime    @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt      DateTime?   @map("reviewed_at") @db.Timestamptz(6)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("kyc_verifications")
+}
+
+model Account {
+  id            String          @id @default(uuid()) @db.Uuid
+  userId        String          @map("user_id") @db.Uuid
+  name          String
+  type          AccountType     @default(current)
+  currency      AccountCurrency @default(EUR)
+  iban          String?
+  balanceCents  BigInt          @default(0) @map("balance_cents")
+  isPrimary     Boolean         @default(false) @map("is_primary")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Recipient {
+  id          String          @id @default(uuid()) @db.Uuid
+  userId      String          @map("user_id") @db.Uuid
+  name        String
+  iban        String?
+  swiftBic    String?         @map("swift_bic")
+  bankName    String?         @map("bank_name")
+  country     String?
+  currency    AccountCurrency @default(EUR)
+  isFavorite  Boolean         @default(false) @map("is_favorite")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("recipients")
+}
+
+model Transaction {
+  id                String          @id @default(uuid()) @db.Uuid
+  userId            String          @map("user_id") @db.Uuid
+  accountId         String          @map("account_id") @db.Uuid
+  direction         TxDirection
+  amountCents       BigInt          @map("amount_cents")
+  currency          AccountCurrency
+  description       String
+  category          String?
+  counterpartyName  String?         @map("counterparty_name")
+  counterpartyIban  String?         @map("counterparty_iban")
+  counterpartySwift String?         @map("counterparty_swift")
+  network           TransferNetwork?
+  fxRate            Decimal?        @map("fx_rate") @db.Decimal(18, 8)
+  feeCents          BigInt          @default(0) @map("fee_cents")
+  status            TxStatus        @default(completed)
+  reference         String?
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account           Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([accountId])
+  @@map("transactions")
+}
+
+model CryptoHolding {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  symbol        String
+  name          String
+  amount        Decimal  @default(0) @db.Decimal(36, 18)
+  avgBuyPriceEur Decimal @default(0) @map("avg_buy_price_eur") @db.Decimal(18, 4)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, symbol])
+  @@map("crypto_holdings")
+}
